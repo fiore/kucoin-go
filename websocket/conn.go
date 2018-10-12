@@ -154,7 +154,9 @@ func (c *Conn) handle() {
 			}
 			break
 		}
-		c.up <- doDecode(c.tc, fr.Payload())
+		if c.up != nil {
+			c.up <- doDecode(c.tc, fr.Payload())
+		}
 		fastws.ReleaseFrame(fr)
 	}
 }
