@@ -66,11 +66,17 @@ func (c *Conn) Updates() <-chan interface{} {
 	return c.up
 }
 
+// IsClosed returns if connection is closed.
+func (c *Conn) IsClosed() bool {
+	return c.up == nil && c.c == nil
+}
+
 // Close closes websocket connection and updates channel.
 func (c *Conn) Close() (err error) {
 	err = c.c.Close("Bye")
 	if err == nil {
 		c.close()
+		c.c = nil
 	}
 	return err
 }
