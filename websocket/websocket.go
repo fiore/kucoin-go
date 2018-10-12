@@ -84,10 +84,11 @@ func (ws *WebSocket) Subscribe(tc Topic, sym string) (c *Conn, err error) {
 	conn, ps, err = ws.dial(Subscribe, tc, sym)
 	if err == nil {
 		c = &Conn{
-			ps: ps,
-			sm: sym,
-			tc: tc,
-			c:  conn,
+			sym: sym,
+			ps:  ps,
+			sm:  sym,
+			tc:  tc,
+			c:   conn,
 		}
 		_, err = c.Send(Subscribe, tc, sym)
 		if err == nil {

@@ -13,11 +13,17 @@ import (
 //
 // Use Update() func to get server messages.
 type Conn struct {
-	ps instanceServer
-	up chan interface{}
-	tc Topic
-	sm string
-	c  *fastws.Conn
+	sym string
+	ps  instanceServer
+	up  chan interface{}
+	tc  Topic
+	sm  string
+	c   *fastws.Conn
+}
+
+// Symbol returns current connected symbol.
+func (c *Conn) Symbol() string {
+	return c.sym
 }
 
 // PingInterval returns server ping interval.
