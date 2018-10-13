@@ -196,7 +196,7 @@ func (c *Conn) handlePingClose(fr *fastws.Frame) (err error) {
 		fr.SetPong()
 		_, err = c.c.WriteFrame(fr)
 	case fr.IsClose():
-		err = c.c.SendCode(fr.Code(), fr.Status(), nil)
+		err = c.c.ReplyClose(fr)
 		if err == nil {
 			err = fastws.EOF
 		}
