@@ -10,10 +10,14 @@ type wsReq struct {
 }
 
 type wsResp struct {
+	Id        string          `json:"id"`
+	Code      json.Number     `json:"code,Number"`
+	Type      string          `json:"type"`
 	Success   bool            `json:"success"`
-	Code      string          `json:"code"`
 	Msg       string          `json:"msg"`
 	Timestamp int64           `json:"timestamp"`
+	Topic     string          `json:"topic"`
+	Seq       uint64          `json:"seq"`
 	Data      json.RawMessage `json:"data"`
 }
 
@@ -41,6 +45,11 @@ type instanceServer struct {
 // Response represents server response after sending data.
 type Response struct {
 	Id   string `json:"id"`
+	Type string `json:"type"`
+}
+
+type pingReq struct {
+	Id   uint64 `json:"id"`
 	Type string `json:"type"`
 }
 

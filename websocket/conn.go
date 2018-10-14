@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"sync/atomic"
+	"time"
 
 	"github.com/dgrr/fastws"
 )
@@ -13,12 +14,13 @@ import (
 //
 // Use Update() func to get server messages.
 type Conn struct {
-	sym string
-	ps  instanceServer
-	up  chan interface{}
-	tc  Topic
-	sm  string
-	c   *fastws.Conn
+	sym        string
+	ps         instanceServer
+	up         chan interface{}
+	tc         Topic
+	sm         string
+	c          *fastws.Conn
+	lastUpdate time.Time
 }
 
 // Symbol returns current connected symbol.
@@ -49,6 +51,7 @@ func (c *Conn) UserType() string {
 func (c *Conn) init() {
 	c.close()
 	c.up = make(chan interface{}, 10)
+	c.lastUpdate = time.Now()
 }
 
 func (c *Conn) close() {
@@ -129,22 +132,48 @@ func (c *Conn) Send(tp Type, tc Topic, sym string) (r Response, err error) {
 	return
 }
 
+func (c *Conn) checkUpdates(stop chan struct{}) {
+	interval := time.Duration(c.PingInterval())
+	for {
+		select {
+		case <-stop:
+			return
+		case <-time.After(time.Millisecond * interval):
+			if time.Now().Sub(c.lastUpdate) > interval {
+				resp := pingReq{
+					Id:   nextId(),
+					Type: "ping",
+				}
+				data, err := json.Marshal(resp)
+				if err != nil {
+					c.up <- err
+				} else {
+					c.c.Write(data)
+				}
+			}
+		}
+	}
+}
+
 func (c *Conn) handle() {
 	if c.c == nil {
 		c.up <- errors.New("nil connection")
 		return
 	}
 	c.init()
+	stop := make(chan struct{}, 1)
+	go c.checkUpdates(stop)
 
 	var fr *fastws.Frame
 	var err error
 	for {
 		fr, err = c.c.NextFrame()
 		if err != nil {
-			if err != fastws.EOF {
-				c.up <- err
+			if err == fastws.EOF {
+				break
 			}
-			break
+			c.up <- err
+			continue
 		}
 
 		err = c.handlePingClose(fr)
@@ -154,11 +183,13 @@ func (c *Conn) handle() {
 			}
 			break
 		}
-		if c.up != nil {
-			c.up <- doDecode(c.tc, fr.Payload())
+		res := doDecode(c.tc, fr.Payload())
+		if c.up != nil && res != nil {
+			c.up <- res
 		}
 		fastws.ReleaseFrame(fr)
 	}
+	stop <- struct{}{}
 }
 
 func doDecode(tc Topic, b []byte) interface{} {
@@ -166,6 +197,21 @@ func doDecode(tc Topic, b []byte) interface{} {
 	var dst interface{}
 
 	err := json.Unmarshal(b, &res)
+	if err != nil {
+		return err
+	}
+
+	switch res.Type {
+	case "ack":
+		return nil
+	case "pong":
+		return nil
+	}
+
+	switch res.Code.String() {
+	case "404":
+		err = fmt.Errorf("%s: %s", res.Code, res.Data)
+	}
 	if err != nil {
 		return err
 	}
@@ -183,7 +229,7 @@ func doDecode(tc Topic, b []byte) interface{} {
 
 	err = json.Unmarshal(res.Data, dst)
 	if err != nil {
-		return err
+		dst = err
 	}
 	return dst
 }
@@ -196,7 +242,7 @@ func (c *Conn) handlePingClose(fr *fastws.Frame) (err error) {
 		fr.SetPong()
 		_, err = c.c.WriteFrame(fr)
 	case fr.IsClose():
-		err = c.c.SendCode(fr.Code(), fr.Status(), nil)
+		err = c.c.ReplyClose(fr)
 		if err == nil {
 			err = fastws.EOF
 		}
