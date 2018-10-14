@@ -23,6 +23,12 @@ type Conn struct {
 	lastUpdate time.Time
 }
 
+// SetUpdates sets parsed channel to be used when a update fire.
+func (c *Conn) SetUpdates(ch chan interface{}) {
+	c.close()
+	c.up = ch
+}
+
 // Symbol returns current connected symbol.
 func (c *Conn) Symbol() string {
 	return c.sym
