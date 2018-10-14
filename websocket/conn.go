@@ -146,6 +146,7 @@ func (c *Conn) checkUpdates(stop chan struct{}) {
 			return
 		case <-time.After(time.Millisecond * interval):
 			if time.Now().Sub(c.lastUpdate) > interval {
+				c.lastUpdate = time.Now()
 				resp := pingReq{
 					Id:   nextId(),
 					Type: "ping",
