@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -14,21 +15,43 @@ import (
 //
 // Use Update() func to get server messages.
 type Conn struct {
-	sym        string
-	ps         instanceServer
-	up         chan interface{}
-	noClose    bool
+	cn *sync.Cond
+	b  bool
+
+	sym string
+	ps  instanceServer
+
+	up      chan interface{}
+	noClose bool
+
 	tc         Topic
 	sm         string
 	c          *fastws.Conn
 	lastUpdate time.Time
 }
 
+func (c *Conn) lock() {
+	c.cn.L.Lock()
+	for c.b {
+		c.cn.Wait()
+	}
+	c.b = true
+	c.cn.L.Unlock()
+}
+
+func (c *Conn) unlock() {
+	c.b = false
+	c.cn.Signal()
+}
+
 // SetUpdates sets parsed channel to be used when a update fire.
 func (c *Conn) SetUpdates(ch chan interface{}) {
 	c.close()
+
+	c.lock()
 	c.up = ch
 	c.noClose = true
+	c.unlock()
 }
 
 // Symbol returns current connected symbol.
@@ -64,8 +87,17 @@ func (c *Conn) init() {
 
 func (c *Conn) close() {
 	if !c.noClose && c.up != nil {
-		close(c.up)
-		c.up = nil
+		ok := false
+		c.lock()
+		select {
+		case _, ok = <-c.up:
+		default:
+		}
+		if ok {
+			close(c.up)
+			c.up = nil
+		}
+		c.unlock()
 	}
 }
 
@@ -155,7 +187,7 @@ func (c *Conn) checkUpdates(stop chan struct{}) {
 				}
 				data, err := json.Marshal(resp)
 				if err != nil {
-					c.up <- err
+					c.sendUpdate(err)
 				} else {
 					c.c.Write(data)
 				}
@@ -169,7 +201,6 @@ func (c *Conn) handle() {
 		c.up <- errors.New("nil connection")
 		return
 	}
-	c.init()
 	stop := make(chan struct{}, 1)
 	go c.checkUpdates(stop)
 
@@ -181,24 +212,31 @@ func (c *Conn) handle() {
 			if err == fastws.EOF {
 				break
 			}
-			c.up <- err
+			c.sendUpdate(err)
 			continue
 		}
 
 		err = c.handlePingClose(fr)
 		if err != nil {
 			if err != fastws.EOF {
-				c.up <- err
+				c.sendUpdate(err)
 			}
 			break
 		}
 		res := c.doDecode(c.tc, fr.Payload())
-		if c.up != nil && res != nil {
-			c.up <- res
-		}
+		c.sendUpdate(res)
+
 		fastws.ReleaseFrame(fr)
 	}
 	stop <- struct{}{}
+}
+
+func (c *Conn) sendUpdate(res interface{}) {
+	c.lock()
+	if res != nil {
+		c.up <- res
+	}
+	c.unlock()
 }
 
 func (c *Conn) doDecode(tc Topic, b []byte) interface{} {

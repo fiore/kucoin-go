@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sync"
 
 	"github.com/dgrr/fastws"
 	"github.com/valyala/fasthttp"
@@ -84,6 +85,7 @@ func (ws *WebSocket) Subscribe(tc Topic, sym string) (c *Conn, err error) {
 	conn, ps, err = ws.dial(Subscribe, tc, sym)
 	if err == nil {
 		c = &Conn{
+			cn:  sync.NewCond(&sync.Mutex{}),
 			sym: sym,
 			ps:  ps,
 			sm:  sym,
@@ -92,6 +94,7 @@ func (ws *WebSocket) Subscribe(tc Topic, sym string) (c *Conn, err error) {
 		}
 		_, err = c.Send(Subscribe, tc, sym)
 		if err == nil {
+			c.init()
 			go c.handle()
 		} else {
 			conn.Close(err.Error())
