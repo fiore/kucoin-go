@@ -17,6 +17,7 @@ type Conn struct {
 	sym        string
 	ps         instanceServer
 	up         chan interface{}
+	noClose    bool
 	tc         Topic
 	sm         string
 	c          *fastws.Conn
@@ -27,6 +28,7 @@ type Conn struct {
 func (c *Conn) SetUpdates(ch chan interface{}) {
 	c.close()
 	c.up = ch
+	c.noClose = true
 }
 
 // Symbol returns current connected symbol.
@@ -61,7 +63,7 @@ func (c *Conn) init() {
 }
 
 func (c *Conn) close() {
-	if c.up != nil {
+	if !c.noClose && c.up != nil {
 		close(c.up)
 		c.up = nil
 	}
@@ -190,7 +192,7 @@ func (c *Conn) handle() {
 			}
 			break
 		}
-		res := doDecode(c.tc, fr.Payload())
+		res := c.doDecode(c.tc, fr.Payload())
 		if c.up != nil && res != nil {
 			c.up <- res
 		}
@@ -199,7 +201,7 @@ func (c *Conn) handle() {
 	stop <- struct{}{}
 }
 
-func doDecode(tc Topic, b []byte) interface{} {
+func (c *Conn) doDecode(tc Topic, b []byte) interface{} {
 	var res wsResp
 	var dst interface{}
 
@@ -225,9 +227,13 @@ func doDecode(tc Topic, b []byte) interface{} {
 
 	switch tc {
 	case TOrderBook:
-		dst = new(OrderBook)
+		dst = &OrderBook{
+			Symbol: c.Symbol(),
+		}
 	case THistory:
-		dst = new(History)
+		dst = &History{
+			Symbol: c.Symbol(),
+		}
 	case TMarket, Tick:
 		dst = new(Market)
 	default:

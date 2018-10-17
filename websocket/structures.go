@@ -55,6 +55,7 @@ type pingReq struct {
 
 // OrderBook is the type received from Orderbook subscription
 type OrderBook struct {
+	Symbol string  `json:"-"`
 	Volume float64 `json:"volume"`
 	Price  float64 `json:"price"`
 	Count  float64 `json:"count"`
@@ -65,6 +66,7 @@ type OrderBook struct {
 
 // History is the type received from History subscription
 type History struct {
+	Symbol    string  `json:"-"`
 	Id        string  `json:"oid"`
 	Price     float64 `json:"price"`
 	Count     float64 `json:"count"`
