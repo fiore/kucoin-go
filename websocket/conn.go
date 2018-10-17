@@ -87,16 +87,9 @@ func (c *Conn) init() {
 
 func (c *Conn) close() {
 	if !c.noClose && c.up != nil {
-		ok := false
 		c.lock()
-		select {
-		case _, ok = <-c.up:
-		default:
-		}
-		if ok {
-			close(c.up)
-			c.up = nil
-		}
+		close(c.up)
+		c.up = nil
 		c.unlock()
 	}
 }
@@ -116,11 +109,13 @@ func (c *Conn) IsClosed() bool {
 
 // Close closes websocket connection and updates channel.
 func (c *Conn) Close() (err error) {
-	err = c.c.Close("Bye")
-	if err == nil {
-		c.close()
-		c.c = nil
+	if c.c != nil {
+		err = c.c.Close("Bye")
+		if err == nil {
+			c.c = nil
+		}
 	}
+	c.close()
 	return err
 }
 
@@ -235,21 +230,13 @@ func (c *Conn) handle() {
 
 func (c *Conn) sendUpdate(res interface{}) (brk bool) {
 	c.lock()
-	if res != nil {
-		select {
-		case _, ok := <-c.up:
-			if ok {
-				select {
-				case c.up <- res:
-					brk = false
-				default:
-					brk = true
-				}
-			}
-		default:
+	defer c.unlock()
+	defer func() {
+		if recover() != nil {
+			brk = true
 		}
-	}
-	c.unlock()
+	}()
+	c.up <- res
 	return
 }
 
