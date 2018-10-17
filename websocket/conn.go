@@ -224,19 +224,33 @@ func (c *Conn) handle() {
 			break
 		}
 		res := c.doDecode(c.tc, fr.Payload())
-		c.sendUpdate(res)
+		if c.sendUpdate(res) {
+			break
+		}
 
 		fastws.ReleaseFrame(fr)
 	}
 	stop <- struct{}{}
 }
 
-func (c *Conn) sendUpdate(res interface{}) {
+func (c *Conn) sendUpdate(res interface{}) (brk bool) {
 	c.lock()
 	if res != nil {
-		c.up <- res
+		select {
+		case _, ok := <-c.up:
+			if ok {
+				select {
+				case c.up <- res:
+					brk = false
+				default:
+					brk = true
+				}
+			}
+		default:
+		}
 	}
 	c.unlock()
+	return
 }
 
 func (c *Conn) doDecode(tc Topic, b []byte) interface{} {
