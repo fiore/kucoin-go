@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	kucoinUrl = "https://api.kucoin.com/v1/"
+	kucoinURL = "https://api.kucoin.com/v1/"
 )
 
 // New returns an instantiated Kucoin struct.
@@ -312,7 +312,7 @@ func (b *Kucoin) ListActiveOrders(symbol string, side string) (activeOrders Acti
 }
 
 // OrdersBook is used to get the information about active orders at Kucoin along with other meta data.
-// Symbol is required parameter, geoup and limit may be empty.
+// Symbol is required parameter, group and limit may be empty.
 func (b *Kucoin) OrdersBook(symbol string, group, limit int) (ordersBook OrdersBook, err error) {
 	if len(symbol) < 1 {
 		return ordersBook, fmt.Errorf("The symbol is required")
@@ -346,6 +346,9 @@ func (b *Kucoin) OrdersBook(symbol string, group, limit int) (ordersBook OrdersB
 }
 
 // CreateOrder is used to create order at Kucoin along with other meta data.
+// Example:
+// - Symbol = KCS-BTC
+// - Side = BUY | SELL
 func (b *Kucoin) CreateOrder(symbol, side string, price, amount float64) (orderOid string, err error) {
 	payload := make(map[string]string)
 	payload["amount"] = strconv.FormatFloat(amount, 'f', 8, 64)
@@ -378,6 +381,9 @@ func (b *Kucoin) CreateOrder(symbol, side string, price, amount float64) (orderO
 
 // CreateOrderByString is used to create order at Kucoin along with other meta data.
 // This ByString version is fix precise problem.
+// Example:
+// - Symbol = KCS-BTC
+// - Side = BUY | SELL
 func (b *Kucoin) CreateOrderByString(symbol, side, price, amount string) (orderOid string, err error) {
 	payload := make(map[string]string)
 	payload["amount"] = amount
@@ -585,7 +591,7 @@ func (b *Kucoin) OrderDetails(symbol, side, orderOid string, limit, page int) (o
 // - Nothing.
 func (b *Kucoin) CreateWithdrawalApply(coin, address string, amount float64) (withdrawalApply Withdrawal, err error) {
 	if len(coin) < 1 || len(address) < 1 || amount == 0 {
-		return withdrawalApply, fmt.Errorf("The not all required parameters are presented")
+		return withdrawalApply, fmt.Errorf("All parameters are required")
 	}
 	payload := map[string]string{}
 	payload["coin"] = coin

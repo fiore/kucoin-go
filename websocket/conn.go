@@ -12,7 +12,6 @@ import (
 )
 
 // Conn represents WebSocket connection to a Topic.
-//
 // Use Update() func to get server messages.
 type Conn struct {
 	cn *sync.Cond
@@ -121,7 +120,7 @@ func (c *Conn) Close() (err error) {
 
 var nid uint64 = 7
 
-func nextId() uint64 {
+func nextID() uint64 {
 	return atomic.AddUint64(&nid, 2)
 }
 
@@ -144,7 +143,7 @@ func (c *Conn) Send(tp Type, tc Topic, sym string) (r Response, err error) {
 	url = fmt.Sprintf(url, sym)
 
 	req := wsReq{
-		Id:    nextId(),
+		Id:    nextID(),
 		Type:  string(tp),
 		Topic: url,
 		Req:   0, // TODO
@@ -177,7 +176,7 @@ func (c *Conn) checkUpdates(stop chan struct{}) {
 			if time.Now().Sub(c.lastUpdate) > interval {
 				c.lastUpdate = time.Now()
 				resp := pingReq{
-					Id:   nextId(),
+					Id:   nextID(),
 					Type: "ping",
 				}
 				data, err := json.Marshal(resp)

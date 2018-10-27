@@ -12,13 +12,13 @@ Unofficial [Kucoin API](https://kucoinapidocs.docs.apiary.io/) implementation wr
 
 ## How to use
 ```bash
-go get -u github.com/eeonevision/kucoin-go
+go get -u github.com/fiore/kucoin-go
 ```
 ```golang
 package main
 
 import (
-	"github.com/eeonevision/kucoin-go"
+	"github.com/fiore/kucoin-go"
 )
 
 func main() {
@@ -50,4 +50,4 @@ func main() {
 | Order books | Auth | ✔ |
 
 ## Donate
-Your **★Star** will be best donation to my work)
+Your **★Star** will be best donation to my work
