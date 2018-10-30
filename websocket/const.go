@@ -2,7 +2,6 @@ package websocket
 
 const (
 	urlServers = "https://kitchen.kucoin.com/v1/bullet/usercenter/loginUser?protocol=websocket&encrypt=true"
-
 	urlOrderBook = "/trade/%s_TRADE"   // Symbol
 	urlHistory   = "/trade/%s_HISTORY" // Symbol
 	urlTick      = "/market/%s_TICK"   // Symbol

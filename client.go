@@ -26,8 +26,10 @@ type client struct {
 
 func newClient(apiKey, apiSecret string) (c *client) {
 	c = &client{
-		apiKey:    apiKey,
-		apiSecret: apiSecret,
+		apiKey,
+		apiSecret,
+		http.Client{},
+		true,
 	}
 	c.httpClient.Timeout = time.Second * 30
 	return
@@ -73,20 +75,20 @@ func (c client) dumpResponse(r *http.Response) {
 func (c *client) do(method, resource string, payload map[string]string, authNeeded bool) ([]byte, error) {
 	var req *http.Request
 
-	Url, err := url.Parse(kucoinUrl)
+	URL, err := url.Parse(kucoinURL)
 	if err != nil {
 		return nil, err
 	}
-	Url.Path = path.Join(Url.Path, resource)
+	URL.Path = path.Join(URL.Path, resource)
 	queryString := ""
 	if method == "GET" {
-		q := Url.Query()
+		q := URL.Query()
 		for key, value := range payload {
 			q.Set(key, value)
 		}
-		Url.RawQuery = q.Encode()
-		req, err = http.NewRequest("GET", Url.String(), nil)
-		queryString = Url.Query().Encode()
+		URL.RawQuery = q.Encode()
+		req, err = http.NewRequest("GET", URL.String(), nil)
+		queryString = URL.Query().Encode()
 	} else {
 		postValues := url.Values{}
 		for key, value := range payload {
@@ -94,7 +96,7 @@ func (c *client) do(method, resource string, payload map[string]string, authNeed
 		}
 		queryString = postValues.Encode()
 		req, err = http.NewRequest(
-			method, Url.String(), strings.NewReader(
+			method, URL.String(), strings.NewReader(
 				queryString,
 			),
 		)
@@ -118,7 +120,7 @@ func (c *client) do(method, resource string, payload map[string]string, authNeed
 		req.Header.Add("KC-API-NONCE", fmt.Sprintf("%v", nonce))
 		req.Header.Add(
 			"KC-API-SIGNATURE", c.sign(
-				Url.Path, queryString, nonce,
+				URL.Path, queryString, nonce,
 			),
 		)
 	}

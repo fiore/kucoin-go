@@ -12,8 +12,62 @@ import (
 )
 
 const (
-	kucoinUrl = "https://api.kucoin.com/v1/"
+	kucoinURL = "https://api.kucoin.com/v1/"
 )
+
+// Custom errors used when an input is required
+var (
+	ErrSymbolRequired    = errors.New("Symbol is required")
+	ErrAllParamsRequired = errors.New("All parameters are required")
+	ErrNonExistingSymbol = errors.New("Entered symbol doesn't exist in Kucoin")
+	ErrNonExistingMarket = errors.New("Entered market doesn't exist in Kucoin")
+)
+
+var (
+	coinsPairsList           = []CoinPair{}
+	openMarketsList          = []string{}
+	defaultMessageWrongInput = "Entered invalid parameter. Accepted values: [%s]"
+)
+
+func (k *Kucoin) getCoinsPairsList() []CoinPair {
+	if len(coinsPairsList) == 0 {
+		coinPair, err := k.GetCoinsPairs()
+		if err == nil {
+			coinsPairsList = coinPair
+		}
+	}
+	return coinsPairsList
+}
+
+func (k *Kucoin) containsCoinsPairs(coinPair string) bool {
+	coinsPairsList = k.getCoinsPairsList()
+	for _, cp := range coinsPairsList {
+		if cp.CoinPair == coinPair {
+			return true
+		}
+	}
+	return false
+}
+
+func (k *Kucoin) getOpenMarketsList() []string {
+	if len(openMarketsList) == 0 {
+		openMarket, err := k.GetOpenMarkets()
+		if err == nil {
+			openMarketsList = openMarket
+		}
+	}
+	return openMarketsList
+}
+
+func (k *Kucoin) containsOpenMarkets(openMarket string) bool {
+	openMarketsList = k.getOpenMarketsList()
+	for _, om := range openMarketsList {
+		if om == openMarket {
+			return true
+		}
+	}
+	return false
+}
 
 // New returns an instantiated Kucoin struct.
 func New(apiKey, apiSecret string) *Kucoin {
@@ -77,13 +131,13 @@ type Kucoin struct {
 }
 
 // SetDebug enables/disables http request/response dump.
-func (b *Kucoin) SetDebug(enable bool) {
-	b.client.debug = enable
+func (k *Kucoin) SetDebug(enable bool) {
+	k.client.debug = enable
 }
 
 // GetUserInfo is used to get the user information at Kucoin along with other meta data.
-func (b *Kucoin) GetUserInfo() (userInfo UserInfo, err error) {
-	r, err := b.client.do("GET", "user/info", nil, true)
+func (k *Kucoin) GetUserInfo() (userInfo UserInfo, err error) {
+	r, err := k.client.do("GET", "user/info", nil, true)
 	if err != nil {
 		return
 	}
@@ -101,8 +155,8 @@ func (b *Kucoin) GetUserInfo() (userInfo UserInfo, err error) {
 }
 
 // GetSymbols is used to get the all open and available trading markets at Kucoin along with other meta data.
-func (b *Kucoin) GetSymbols() (symbols []Symbol, err error) {
-	r, err := b.client.do("GET", "market/open/symbols", nil, false)
+func (k *Kucoin) GetSymbols() (symbols []Symbol, err error) {
+	r, err := k.client.do("GET", "market/open/symbols", nil, false)
 	if err != nil {
 		return
 	}
@@ -117,24 +171,12 @@ func (b *Kucoin) GetSymbols() (symbols []Symbol, err error) {
 	err = json.Unmarshal(r, &rawRes)
 	symbols = rawRes.Data
 	return
+
 }
 
-// GetUserSymbols is used to get the all open and available trading markets at Kucoin along with other meta data.
-// The user should be logged to call this method.
-// Filter parameter can be whether 'FAVOURITE' or 'STICK',
-// market and symbol parameters can be any as presented at exchange.
-func (b *Kucoin) GetUserSymbols(market, symbol, filter string) (symbols []Symbol, err error) {
-	payload := map[string]string{}
-	if len(market) > 1 {
-		payload["market"] = market
-	}
-	if len(symbol) > 1 {
-		payload["symbol"] = symbol
-	}
-	if len(filter) > 1 {
-		payload["filter"] = filter
-	}
-	r, err := b.client.do("GET", "market/symbols", payload, true)
+// GetCoinsPairs is used to get the all available trading markets at Kucoin.
+func (k *Kucoin) GetCoinsPairs() (coinPair []CoinPair, err error) {
+	r, err := k.client.do("GET", "market/open/coins-trending", nil, true)
 	if err != nil {
 		return
 	}
@@ -145,6 +187,54 @@ func (b *Kucoin) GetUserSymbols(market, symbol, filter string) (symbols []Symbol
 	if err = handleErr(response); err != nil {
 		return
 	}
+	var rawRes rawCoinPair
+	err = json.Unmarshal(r, &rawRes)
+	coinPair = rawRes.Data
+	return
+}
+
+// GetUserSymbols is used to get the all open and available trading markets at Kucoin along with other meta data.
+// The user should be logged to call this method.
+// Example:
+// - Market = BTC
+// - Symbol = KCS-BTC
+// - Filter = FAVOURITE | STICK
+func (k *Kucoin) GetUserSymbols(market, symbol, filter string) (symbols []Symbol, err error) {
+	if len(market) > 1 {
+		if !k.containsOpenMarkets(strings.ToUpper(market)) {
+			return symbols, ErrNonExistingMarket
+		}
+	}
+	if len(symbol) > 1 {
+		if !k.containsCoinsPairs(strings.ToUpper(symbol)) {
+			return symbols, ErrNonExistingSymbol
+		}
+	}
+	if len(filter) > 1 {
+		if filter != "FAVOURITE" && filter != "STICK" {
+			return symbols, fmt.Errorf(defaultMessageWrongInput, strings.Join([]string{"FAVOURITE", "STICK"}, ","))
+		}
+	}
+
+	payload := map[string]string{
+		"symbol": strings.ToUpper(symbol),
+		"market": strings.ToUpper(market),
+		"filter": strings.ToUpper(filter),
+	}
+
+	r, err := k.client.do("GET", "market/symbols", payload, true)
+	if err != nil {
+		return
+	}
+
+	var response interface{}
+	if err = json.Unmarshal(r, &response); err != nil {
+		return
+	}
+	if err = handleErr(response); err != nil {
+		return
+	}
+
 	var rawRes rawSymbols
 	err = json.Unmarshal(r, &rawRes)
 	symbols = rawRes.Data
@@ -153,10 +243,18 @@ func (b *Kucoin) GetUserSymbols(market, symbol, filter string) (symbols []Symbol
 
 // GetSymbol is used to get the open and available trading market at Kucoin along with other meta data.
 // Trading symbol e.g. KCS-BTC. If not specified then you will get data of all symbols.
-func (b *Kucoin) GetSymbol(market string) (symbol Symbol, err error) {
-	r, err := b.client.do("GET",
-		"open/tick", doArgs("symbol", strings.ToUpper(market)), false,
-	)
+func (k *Kucoin) GetSymbol(s string) (symbol Symbol, err error) {
+	if len(s) < 1 {
+		return symbol, ErrSymbolRequired
+	}
+	if !k.containsCoinsPairs(strings.ToUpper(s)) {
+		return symbol, ErrNonExistingSymbol
+	}
+	payload := map[string]string{
+		"symbol": strings.ToUpper(s),
+	}
+
+	r, err := k.client.do("GET", "open/tick", payload, false)
 	if err != nil {
 		return
 	}
@@ -173,9 +271,28 @@ func (b *Kucoin) GetSymbol(market string) (symbol Symbol, err error) {
 	return
 }
 
-// GetCoins is used to get the all open and available trading coins at Kucoin along with other meta data.
-func (b *Kucoin) GetCoins() (coins []Coin, err error) {
-	r, err := b.client.do("GET", "market/open/coins", nil, false)
+// GetOpenMarkets is used to get all open markets.
+func (k *Kucoin) GetOpenMarkets() (markets []string, err error) {
+	r, err := k.client.do("GET", "open/markets", nil, false)
+	if err != nil {
+		return
+	}
+	var response interface{}
+	if err = json.Unmarshal(r, &response); err != nil {
+		return
+	}
+	if err = handleErr(response); err != nil {
+		return
+	}
+	var rawRes rawMarket
+	err = json.Unmarshal(r, &rawRes)
+	markets = rawRes.Data
+	return
+}
+
+// GetCoins is used to get all open and available trading coins at Kucoin along with other meta data.
+func (k *Kucoin) GetCoins() (coins []Coin, err error) {
+	r, err := k.client.do("GET", "market/open/coins", nil, false)
 	if err != nil {
 		return
 	}
@@ -193,10 +310,20 @@ func (b *Kucoin) GetCoins() (coins []Coin, err error) {
 }
 
 // GetCoin is used to get the open and available trading coin at Kucoin along with other meta data.
-func (b *Kucoin) GetCoin(c string) (coin Coin, err error) {
-	r, err := b.client.do(
-		"GET", "market/open/coin-info", doArgs("coin", strings.ToUpper(c)), false,
-	)
+// Example:
+// - Coin (required) = BTC
+func (k *Kucoin) GetCoin(c string) (coin Coin, err error) {
+	if len(c) < 1 {
+		return coin, ErrSymbolRequired
+	}
+	if !k.containsOpenMarkets(strings.ToUpper(c)) {
+		return coin, ErrNonExistingMarket
+	}
+	payload := map[string]string{
+		"coin": strings.ToUpper(c),
+	}
+
+	r, err := k.client.do("GET", "market/open/coin-info", payload, false)
 	if err != nil {
 		return
 	}
@@ -214,8 +341,17 @@ func (b *Kucoin) GetCoin(c string) (coin Coin, err error) {
 }
 
 // GetCoinBalance is used to get the balance at chosen coin at Kucoin along with other meta data.
-func (b *Kucoin) GetCoinBalance(c string) (coinBalance CoinBalance, err error) {
-	r, err := b.client.do("GET", fmt.Sprintf("account/%s/balance", strings.ToUpper(c)), nil, true)
+// Example:
+// - Coin (required) = BTC
+func (k *Kucoin) GetCoinBalance(coin string) (coinBalance CoinBalance, err error) {
+	if len(coin) < 1 {
+		return coinBalance, ErrSymbolRequired
+	}
+	if !k.containsOpenMarkets(strings.ToUpper(coin)) {
+		return coinBalance, ErrNonExistingMarket
+	}
+
+	r, err := k.client.do("GET", fmt.Sprintf("account/%s/balance", strings.ToUpper(coin)), nil, true)
 	if err != nil {
 		return
 	}
@@ -233,8 +369,15 @@ func (b *Kucoin) GetCoinBalance(c string) (coinBalance CoinBalance, err error) {
 }
 
 // GetCoinDepositAddress is used to get the address at chosen coin at Kucoin along with other meta data.
-func (b *Kucoin) GetCoinDepositAddress(c string) (coinDepositAddress CoinDepositAddress, err error) {
-	r, err := b.client.do("GET", fmt.Sprintf("account/%s/wallet/address", strings.ToUpper(c)), nil, true)
+func (k *Kucoin) GetCoinDepositAddress(coin string) (coinDepositAddress CoinDepositAddress, err error) {
+	if len(coin) < 1 {
+		return coinDepositAddress, ErrSymbolRequired
+	}
+	if !k.containsOpenMarkets(strings.ToUpper(coin)) {
+		return coinDepositAddress, ErrNonExistingMarket
+	}
+
+	r, err := k.client.do("GET", fmt.Sprintf("account/%s/wallet/address", strings.ToUpper(coin)), nil, true)
 	if err != nil {
 		return
 	}
@@ -253,18 +396,26 @@ func (b *Kucoin) GetCoinDepositAddress(c string) (coinDepositAddress CoinDeposit
 
 // ListActiveMapOrders is used to get the information about active orders in user-friendly view
 // at Kucoin along with other meta data.
-// Symbol is required parameter, and side (or type of order in kucoin docs) may be empty.
-func (b *Kucoin) ListActiveMapOrders(symbol string, side string) (activeMapOrders ActiveMapOrder, err error) {
+// Example:
+// - Symbol (required) = KCS-BTC
+// - Type = BUY | SELL
+func (k *Kucoin) ListActiveMapOrders(symbol, side string) (activeMapOrders ActiveMapOrder, err error) {
 	if len(symbol) < 1 {
-		return activeMapOrders, fmt.Errorf("Symbol is required")
+		return activeMapOrders, ErrSymbolRequired
+	}
+	if !k.containsCoinsPairs(strings.ToUpper(symbol)) {
+		return activeMapOrders, ErrNonExistingSymbol
 	}
 	payload := make(map[string]string)
 	payload["symbol"] = strings.ToUpper(symbol)
 	if len(side) > 1 {
-		payload["side"] = strings.ToUpper(side)
+		if side != "BUY" && side != "SELL" {
+			return activeMapOrders, fmt.Errorf(defaultMessageWrongInput, strings.Join([]string{"BUY", "SELL"}, ","))
+		}
+		payload["type"] = strings.ToUpper(side)
 	}
 
-	r, err := b.client.do("GET", "order/active-map", payload, true)
+	r, err := k.client.do("GET", "order/active-map", payload, true)
 	if err != nil {
 		return
 	}
@@ -283,21 +434,32 @@ func (b *Kucoin) ListActiveMapOrders(symbol string, side string) (activeMapOrder
 
 // ListActiveOrders is used to get the information about active orders in array mode
 // at Kucoin along with other meta data.
-// Symbol is required parameter, and side (or type of order in kucoin docs) may be empty.
-func (b *Kucoin) ListActiveOrders(symbol string, side string) (activeOrders ActiveOrder, err error) {
+// Example:
+// - Symbol (required) = KCS-BTC
+// - Type = BUY | SELL
+func (k *Kucoin) ListActiveOrders(symbol, side string) (activeOrders ActiveOrder, err error) {
 	if len(symbol) < 1 {
-		return activeOrders, fmt.Errorf("The symbol is required")
+		return activeOrders, ErrSymbolRequired
+	}
+	if !k.containsCoinsPairs(strings.ToUpper(symbol)) {
+		return activeOrders, ErrNonExistingSymbol
 	}
 	payload := make(map[string]string)
 	payload["symbol"] = strings.ToUpper(symbol)
 	if len(side) > 1 {
-		payload["side"] = strings.ToUpper(side)
+		if side != "BUY" && side != "SELL" {
+			return activeOrders, fmt.Errorf(defaultMessageWrongInput, strings.Join([]string{"BUY", "SELL"}, ","))
+		}
+		payload["type"] = strings.ToUpper(side)
 	}
 
-	r, err := b.client.do("GET", "order/active", payload, true)
+	r, err := k.client.do("GET", "order/active", payload, true)
 	if err != nil {
 		return
 	}
+
+	fmt.Println(string(r))
+
 	var response interface{}
 	if err = json.Unmarshal(r, &response); err != nil {
 		return
@@ -312,13 +474,26 @@ func (b *Kucoin) ListActiveOrders(symbol string, side string) (activeOrders Acti
 }
 
 // OrdersBook is used to get the information about active orders at Kucoin along with other meta data.
-// Symbol is required parameter, geoup and limit may be empty.
-func (b *Kucoin) OrdersBook(symbol string, group, limit int) (ordersBook OrdersBook, err error) {
+// Example:
+// - Symbol (required) = KCS-BTC
+// - Group
+// - Limit
+// - Direction = BUY | SELL
+func (k *Kucoin) OrdersBook(symbol string, group, limit int, direction string) (ordersBook OrdersBook, err error) {
 	if len(symbol) < 1 {
-		return ordersBook, fmt.Errorf("The symbol is required")
+		return ordersBook, ErrSymbolRequired
 	}
-	payload := map[string]string{}
+	if !k.containsCoinsPairs(strings.ToUpper(symbol)) {
+		return ordersBook, ErrNonExistingSymbol
+	}
+	payload := make(map[string]string)
 	payload["symbol"] = strings.ToUpper(symbol)
+	if len(direction) > 1 {
+		if direction != "BUY" && direction != "SELL" {
+			return ordersBook, fmt.Errorf(defaultMessageWrongInput, strings.Join([]string{"BUY", "SELL"}, ","))
+		}
+		payload["direction"] = strings.ToUpper(direction)
+	}
 	if group > 0 {
 		payload["group"] = fmt.Sprintf("%v", group)
 	}
@@ -328,7 +503,7 @@ func (b *Kucoin) OrdersBook(symbol string, group, limit int) (ordersBook OrdersB
 		payload["limit"] = fmt.Sprintf("%v", limit)
 	}
 
-	r, err := b.client.do("GET", "open/orders", payload, true)
+	r, err := k.client.do("GET", "open/orders", payload, true)
 	if err != nil {
 		return
 	}
@@ -346,13 +521,29 @@ func (b *Kucoin) OrdersBook(symbol string, group, limit int) (ordersBook OrdersB
 }
 
 // CreateOrder is used to create order at Kucoin along with other meta data.
-func (b *Kucoin) CreateOrder(symbol, side string, price, amount float64) (orderOid string, err error) {
-	payload := make(map[string]string)
-	payload["amount"] = strconv.FormatFloat(amount, 'f', 8, 64)
-	payload["price"] = strconv.FormatFloat(price, 'f', 8, 64)
-	payload["type"] = strings.ToUpper(side)
+// Example:
+// - Symbol (required) = KCS-BTC
+// - Side (required) = BUY | SELL
+// - Price (required) = 0.0001700
+// - Amount (required) = 1.5
+func (k *Kucoin) CreateOrder(symbol, side string, price, amount float64) (orderOid string, err error) {
+	if len(symbol) < 1 || len(side) < 1 || price <= 0.0 || amount <= 0.0 {
+		return orderOid, ErrAllParamsRequired
+	}
+	if !k.containsCoinsPairs(strings.ToUpper(symbol)) {
+		return orderOid, ErrNonExistingSymbol
+	}
+	if side != "BUY" && side != "SELL" {
+		return orderOid, fmt.Errorf(defaultMessageWrongInput, strings.Join([]string{"BUY", "SELL"}, ","))
+	}
+	payload := map[string]string{
+		"symbol": strings.ToUpper(symbol),
+		"amount": strconv.FormatFloat(amount, 'f', 8, 64),
+		"price":  strconv.FormatFloat(price, 'f', 8, 64),
+		"type":   strings.ToUpper(side),
+	}
 
-	r, err := b.client.do("POST", fmt.Sprintf("%s/order", strings.ToUpper(symbol)), payload, true)
+	r, err := k.client.do("POST", "order", payload, true)
 	if err != nil {
 		return
 	}
@@ -378,13 +569,29 @@ func (b *Kucoin) CreateOrder(symbol, side string, price, amount float64) (orderO
 
 // CreateOrderByString is used to create order at Kucoin along with other meta data.
 // This ByString version is fix precise problem.
-func (b *Kucoin) CreateOrderByString(symbol, side, price, amount string) (orderOid string, err error) {
-	payload := make(map[string]string)
-	payload["amount"] = amount
-	payload["price"] = price
-	payload["type"] = strings.ToUpper(side)
+// Example:
+// - Symbol (required) = KCS-BTC
+// - Side (required) = BUY | SELL
+// - Price (required) = 0.0001700
+// - Amount (required) = 1.5
+func (k *Kucoin) CreateOrderByString(symbol, side, price, amount string) (orderOid string, err error) {
+	if len(symbol) < 1 || len(side) < 1 || len(price) < 1 || len(amount) < 1 {
+		return orderOid, ErrAllParamsRequired
+	}
+	if !k.containsCoinsPairs(strings.ToUpper(symbol)) {
+		return orderOid, ErrNonExistingSymbol
+	}
+	if side != "BUY" && side != "SELL" {
+		return orderOid, fmt.Errorf(defaultMessageWrongInput, strings.Join([]string{"BUY", "SELL"}, ","))
+	}
+	payload := map[string]string{
+		"symbol": strings.ToUpper(symbol),
+		"amount": amount,
+		"price":  price,
+		"type":   strings.ToUpper(side),
+	}
 
-	r, err := b.client.do("POST", fmt.Sprintf("%s/order", strings.ToUpper(symbol)), payload, true)
+	r, err := k.client.do("POST", "order", payload, true)
 	if err != nil {
 		return
 	}
@@ -412,27 +619,34 @@ func (b *Kucoin) CreateOrderByString(symbol, side, price, amount string) (orderO
 // at Kucoin along with other meta data. Coin, Side (type in Kucoin docs.)
 // and Status are required parameters. Limit and page may be zeros.
 // Example:
-// - Coin = KCS
-// - Side = DEPOSIT | WITHDRAW
-// - Status = FINISHED | CANCEL | PENDING
-func (b *Kucoin) AccountHistory(coin, side, status string, limit, page int) (accountHistory AccountHistory, err error) {
+// - Coin (required) = KCS
+// - Side (required) = DEPOSIT | WITHDRAW
+// - Status (required) = FINISHED | CANCEL | PENDING
+// - Page
+func (k *Kucoin) AccountHistory(coin, side, status string, page int) (accountHistory AccountHistory, err error) {
 	if len(coin) < 1 || len(side) < 1 || len(status) < 1 {
-		return accountHistory, fmt.Errorf("The not all required parameters are presented")
+		return accountHistory, ErrAllParamsRequired
 	}
-	payload := map[string]string{}
-	payload["type"] = side
-	payload["status"] = status
-	if limit == 0 {
-		payload["limit"] = fmt.Sprintf("%v", 1000)
-	} else {
-		payload["limit"] = fmt.Sprintf("%v", limit)
+	if !k.containsOpenMarkets(strings.ToUpper(coin)) {
+		return accountHistory, ErrNonExistingMarket
+	}
+	if side != "DEPOSIT" && side != "WITHDRAW" {
+		return accountHistory, fmt.Errorf(defaultMessageWrongInput, strings.Join([]string{"DEPOSIT", "WITHDRAW"}, ","))
+	}
+	if status != "FINISHED" && status != "CANCEL" && status != "PENDING" {
+		return accountHistory, fmt.Errorf(defaultMessageWrongInput, strings.Join([]string{"FINISHED", "CANCEL", "PENDING"}, ","))
+	}
+
+	payload := map[string]string{
+		"coin":   strings.ToUpper(coin),
+		"type":   strings.ToUpper(side),
+		"status": strings.ToUpper(status),
 	}
 	if page != 0 {
 		payload["page"] = fmt.Sprintf("%v", page)
 	}
 
-	r, err := b.client.do("GET", fmt.Sprintf(
-		"account/%s/wallet/records", strings.ToUpper(coin)), payload, true)
+	r, err := k.client.do("GET", fmt.Sprintf("account/%s/wallet/records", strings.ToUpper(coin)), payload, true)
 	if err != nil {
 		return
 	}
@@ -452,15 +666,25 @@ func (b *Kucoin) AccountHistory(coin, side, status string, limit, page int) (acc
 // ListSpecificDealtOrders is used to get the information about dealt orders for specific symbol at Kucoin along with other meta data.
 // Symbol, Side (type in Kucoin docs.) are required parameters. Limit and page may be zeros.
 // Example:
-// - Symbol = KCS-BTC
+// - Symbol (required) = KCS-BTC
 // - Side = BUY | SELL
-func (b *Kucoin) ListSpecificDealtOrders(symbol, side string, limit, page int) (specificDealtOrders SpecificDealtOrder, err error) {
-	if len(symbol) < 1 || len(side) < 1 {
-		return specificDealtOrders, fmt.Errorf("The not all required parameters are presented")
+// - Limit
+// - Page
+func (k *Kucoin) ListSpecificDealtOrders(symbol, side string, limit, page int) (specificDealtOrders SpecificDealtOrder, err error) {
+	if len(symbol) < 1 {
+		return specificDealtOrders, ErrSymbolRequired
 	}
-	payload := map[string]string{}
-	payload["symbol"] = symbol
-	payload["type"] = side
+	if !k.containsCoinsPairs(strings.ToUpper(symbol)) {
+		return specificDealtOrders, ErrNonExistingSymbol
+	}
+	payload := make(map[string]string)
+	payload["symbol"] = strings.ToUpper(symbol)
+	if len(side) > 1 {
+		if side != "BUY" && side != "SELL" {
+			return specificDealtOrders, fmt.Errorf(defaultMessageWrongInput, strings.Join([]string{"BUY", "SELL"}, ","))
+		}
+		payload["type"] = strings.ToUpper(side)
+	}
 	if limit == 0 {
 		payload["limit"] = fmt.Sprintf("%v", 1000)
 	} else {
@@ -470,7 +694,7 @@ func (b *Kucoin) ListSpecificDealtOrders(symbol, side string, limit, page int) (
 		payload["page"] = fmt.Sprintf("%v", page)
 	}
 
-	r, err := b.client.do("GET", "deal-orders", payload, true)
+	r, err := k.client.do("GET", "deal-orders", payload, true)
 	if err != nil {
 		return
 	}
@@ -490,13 +714,26 @@ func (b *Kucoin) ListSpecificDealtOrders(symbol, side string, limit, page int) (
 // ListMergedDealtOrders is used to get the information about dealt orders for
 // all symbols at Kucoin along with other meta data.
 // All parameters are optional. Timestamp must be in milliseconds from Unix epoch.
-func (b *Kucoin) ListMergedDealtOrders(symbol, side string, limit, page int, since, before int64) (mergedDealtOrders MergedDealtOrder, err error) {
-	payload := map[string]string{}
+// Example:
+// - Symbol = KCS-BTC
+// - Side = BUY | SELL
+// - Limit
+// - Page
+// - Since
+// - Before
+func (k *Kucoin) ListMergedDealtOrders(symbol, side string, limit, page int, since, before int64) (mergedDealtOrders MergedDealtOrder, err error) {
+	payload := make(map[string]string)
 	if len(symbol) > 1 {
-		payload["symbol"] = symbol
+		if !k.containsCoinsPairs(strings.ToUpper(symbol)) {
+			return mergedDealtOrders, ErrNonExistingSymbol
+		}
+		payload["symbol"] = strings.ToUpper(symbol)
 	}
 	if len(side) > 1 {
-		payload["type"] = side
+		if side != "BUY" && side != "SELL" {
+			return mergedDealtOrders, fmt.Errorf(defaultMessageWrongInput, strings.Join([]string{"BUY", "SELL"}, ","))
+		}
+		payload["type"] = strings.ToUpper(side)
 	}
 	if (limit == 0 || limit > 100) && len(symbol) > 1 {
 		payload["limit"] = fmt.Sprintf("%v", 100)
@@ -515,7 +752,7 @@ func (b *Kucoin) ListMergedDealtOrders(symbol, side string, limit, page int, sin
 		payload["before"] = fmt.Sprintf("%v", before)
 	}
 
-	r, err := b.client.do("GET", "order/dealt", payload, true)
+	r, err := k.client.do("GET", "order/dealt", payload, true)
 	if err != nil {
 		return
 	}
@@ -536,16 +773,26 @@ func (b *Kucoin) ListMergedDealtOrders(symbol, side string, limit, page int, sin
 // Symbol, Side (type in Kucoin docs.) are required parameters.
 // Limit may be zero, and not greater than 20. Page may be zero and by default is equal to 1.
 // Example:
-// - Symbol = KCS-BTC
-// - Side = BUY | SELL
-func (b *Kucoin) OrderDetails(symbol, side, orderOid string, limit, page int) (orderDetails OrderDetails, err error) {
+// - Symbol (required) = KCS-BTC
+// - Side (required) = BUY | SELL
+// - OrderOid (required)
+// - Limit
+// - Page
+func (k *Kucoin) OrderDetails(symbol, side, orderOid string, limit, page int) (orderDetails OrderDetails, err error) {
 	if len(symbol) < 1 || len(side) < 1 || len(orderOid) < 1 {
-		return orderDetails, fmt.Errorf("The not all required parameters are presented")
+		return orderDetails, ErrAllParamsRequired
 	}
-	payload := map[string]string{}
-	payload["orderOid"] = orderOid
-	payload["symbol"] = symbol
-	payload["type"] = side
+	if !k.containsCoinsPairs(strings.ToUpper(symbol)) {
+		return orderDetails, ErrNonExistingSymbol
+	}
+	if side != "BUY" && side != "SELL" {
+		return orderDetails, fmt.Errorf(defaultMessageWrongInput, strings.Join([]string{"BUY", "SELL"}, ","))
+	}
+	payload := map[string]string{
+		"symbol":   strings.ToUpper(symbol),
+		"type":     strings.ToUpper(side),
+		"orderOid": strings.ToUpper(orderOid),
+	}
 	if limit == 0 {
 		payload["limit"] = fmt.Sprintf("%v", 20)
 	} else {
@@ -557,7 +804,7 @@ func (b *Kucoin) OrderDetails(symbol, side, orderOid string, limit, page int) (o
 		payload["page"] = fmt.Sprintf("%v", page)
 	}
 
-	r, err := b.client.do("GET", "order/detail", payload, true)
+	r, err := k.client.do("GET", "order/detail", payload, true)
 	if err != nil {
 		return
 	}
@@ -576,24 +823,25 @@ func (b *Kucoin) OrderDetails(symbol, side, orderOid string, limit, page int) (o
 
 // CreateWithdrawalApply is used to create withdrawal for specific coin
 // at Kucoin along with other meta data.
-// coin, address and amount are required parameters.
 // Example:
-// - coin = KCS
-// - address = example_address
-// - amount 0.68
+// - Coin (required) = KCS
+// - Address (required) =
+// - Amount (required) = 0.50
 // Result:
 // - Nothing.
-func (b *Kucoin) CreateWithdrawalApply(coin, address string, amount float64) (withdrawalApply Withdrawal, err error) {
-	if len(coin) < 1 || len(address) < 1 || amount == 0 {
-		return withdrawalApply, fmt.Errorf("The not all required parameters are presented")
+func (k *Kucoin) CreateWithdrawalApply(coin, address string, amount float64) (withdrawalApply Withdrawal, err error) {
+	if len(coin) < 1 || len(address) < 1 || amount <= 0.0 {
+		return withdrawalApply, ErrAllParamsRequired
 	}
-	payload := map[string]string{}
-	payload["coin"] = coin
-	payload["address"] = address
-	payload["amount"] = fmt.Sprintf("%v", amount)
+	if !k.containsOpenMarkets(strings.ToUpper(coin)) {
+		return withdrawalApply, ErrNonExistingMarket
+	}
+	payload := map[string]string{
+		"address": address,
+		"amount":  fmt.Sprintf("%v", amount),
+	}
 
-	r, err := b.client.do("POST", fmt.Sprintf(
-		"account/%s/withdraw/apply", strings.ToUpper(coin)), payload, true)
+	r, err := k.client.do("POST", fmt.Sprintf("account/%s/withdraw/apply", strings.ToUpper(coin)), payload, true)
 	if err != nil {
 		return
 	}
@@ -612,21 +860,23 @@ func (b *Kucoin) CreateWithdrawalApply(coin, address string, amount float64) (wi
 
 // CancelWithdrawal used to cancel withdrawal for specific coin
 // at Kucoin along with other meta data.
-// coin, txOid are required parameters.
 // Example:
-// - coin = KCS
-// - txOid = example_tx
+// - Coin (required) = KCS
+// - TxOid (required)
 // Result:
 // - Nothing.
-func (b *Kucoin) CancelWithdrawal(coin, txOid string) (withdrawal Withdrawal, err error) {
+func (k *Kucoin) CancelWithdrawal(coin, txOid string) (withdrawal Withdrawal, err error) {
 	if len(coin) < 1 || len(txOid) < 1 {
-		return withdrawal, fmt.Errorf("The not all required parameters are presented")
+		return withdrawal, ErrAllParamsRequired
 	}
-	payload := map[string]string{}
-	payload["txOid"] = txOid
+	if !k.containsOpenMarkets(strings.ToUpper(coin)) {
+		return withdrawal, ErrNonExistingMarket
+	}
+	payload := map[string]string{
+		"txOid": txOid,
+	}
 
-	r, err := b.client.do("POST", fmt.Sprintf(
-		"account/%s/withdraw/cancel", strings.ToUpper(coin)), payload, true)
+	r, err := k.client.do("POST", fmt.Sprintf("account/%s/withdraw/cancel", strings.ToUpper(coin)), payload, true)
 	if err != nil {
 		return
 	}
@@ -644,16 +894,27 @@ func (b *Kucoin) CancelWithdrawal(coin, txOid string) (withdrawal Withdrawal, er
 }
 
 // CancelOrder is used to cancel execution of current order at Kucoin along with other meta data.
-// Side (type in Kucoin docs.) and order ID are required parameters. Symbol is optional.
-func (b *Kucoin) CancelOrder(orderOid, side, symbol string) error {
+// Example:
+// - Symbol (required) = KCS-BTC
+// - OrderId (required)
+// - Side (required) = BUY | SELL
+func (k *Kucoin) CancelOrder(symbol, orderOid, side string) error {
 	if len(symbol) < 1 || len(side) < 1 || len(orderOid) < 1 {
-		return fmt.Errorf("The not all required parameters are presented")
+		return ErrAllParamsRequired
 	}
-	payload := map[string]string{}
-	payload["orderOid"] = orderOid
-	payload["type"] = side
+	if !k.containsCoinsPairs(strings.ToUpper(symbol)) {
+		return ErrNonExistingSymbol
+	}
+	if side != "BUY" && side != "SELL" {
+		return fmt.Errorf(defaultMessageWrongInput, strings.Join([]string{"BUY", "SELL"}, ","))
+	}
+	payload := map[string]string{
+		"symbol":   strings.ToUpper(symbol),
+		"orderOid": orderOid,
+		"type":     strings.ToUpper(side),
+	}
 
-	r, err := b.client.do("POST", fmt.Sprintf("%s/cancel-order", strings.ToUpper(symbol)), payload, true)
+	r, err := k.client.do("POST", "cancel-order", payload, true)
 	if err != nil {
 		return err
 	}
@@ -665,17 +926,26 @@ func (b *Kucoin) CancelOrder(orderOid, side, symbol string) error {
 }
 
 // CancelAllOrders is used to cancel execution of all orders at Kucoin along with other meta data.
-// Symbol, Side (type in Kucoin docs.) are optional parameters.
-func (b *Kucoin) CancelAllOrders(symbol, side string) error {
-	payload := map[string]string{}
-	if len(symbol) > 1 {
-		payload["symbol"] = strings.ToUpper(symbol)
+// Example:
+// - Symbol (required) = KCS-BTC
+// - Side = BUY | SELL
+func (k *Kucoin) CancelAllOrders(symbol, side string) error {
+	if len(symbol) < 1 {
+		return ErrSymbolRequired
 	}
+	if !k.containsCoinsPairs(strings.ToUpper(symbol)) {
+		return ErrNonExistingSymbol
+	}
+	payload := make(map[string]string)
+	payload["symbol"] = strings.ToUpper(symbol)
 	if len(side) > 1 {
-		payload["type"] = side
+		if side != "BUY" && side != "SELL" {
+			return fmt.Errorf(defaultMessageWrongInput, strings.Join([]string{"BUY", "SELL"}, ","))
+		}
+		payload["type"] = strings.ToUpper(side)
 	}
 
-	r, err := b.client.do("POST", "order/cancel-all", payload, true)
+	r, err := k.client.do("POST", "order/cancel-all", payload, true)
 	if err != nil {
 		return err
 	}
