@@ -40,35 +40,35 @@ func TestGetCoinsPairs(t *testing.T) {
 }
 
 func TestGetUserSymbols(t *testing.T) {
-	symbols, err := kucoin.GetUserSymbols("TEST", "KCS-BTC", "FAVOURITE")
+	_, err := kucoin.GetUserSymbols("TEST", "KCS-BTC", "FAVOURITE")
 	if assert.Error(t, err) {
 		require.Equal(t, kucoinGo.ErrNonExistingMarket, err)
 	}
-	symbols, err = kucoin.GetUserSymbols("BTC", "TEST", "FAVOURITE")
+	_, err = kucoin.GetUserSymbols("BTC", "TEST", "FAVOURITE")
 	if assert.Error(t, err) {
 		require.Equal(t, kucoinGo.ErrNonExistingSymbol, err)
 	}
-	symbols, err = kucoin.GetUserSymbols("BTC", "KCS-BTC", "TEST")
+	_, err = kucoin.GetUserSymbols("BTC", "KCS-BTC", "TEST")
 	if assert.Error(t, err) {
 		require.Equal(t, errors.New("Entered invalid parameter. Accepted values: [FAVOURITE,STICK]"), err)
 	}
 
-	symbols, err = kucoin.GetUserSymbols("BTC", "KCS-BTC", "FAVOURITE")
+	symbols, err := kucoin.GetUserSymbols("BTC", "KCS-BTC", "FAVOURITE")
 	t.Logf("GetUserSymbols : %#v\n", symbols)
 	require.NoError(t, err, defaultErrorMessage)
 }
 
 func TestGetSymbol(t *testing.T) {
-	symbol, err := kucoin.GetSymbol("")
+	_, err := kucoin.GetSymbol("")
 	if assert.Error(t, err) {
 		require.Equal(t, kucoinGo.ErrSymbolRequired, err)
 	}
-	symbol, err = kucoin.GetSymbol("TEST")
+	_, err = kucoin.GetSymbol("TEST")
 	if assert.Error(t, err) {
 		require.Equal(t, kucoinGo.ErrNonExistingSymbol, err)
 	}
 
-	symbol, err = kucoin.GetSymbol("KCS-BTC")
+	symbol, err := kucoin.GetSymbol("KCS-BTC")
 	t.Logf("GetSymbol : %#v\n", symbol)
 	require.NoError(t, err, defaultErrorMessage)
 }
@@ -80,103 +80,103 @@ func TestGetCoins(t *testing.T) {
 }
 
 func TestGetCoin(t *testing.T) {
-	coin, err := kucoin.GetCoin("")
+	_, err := kucoin.GetCoin("")
 	if assert.Error(t, err) {
 		require.Equal(t, kucoinGo.ErrSymbolRequired, err)
 	}
-	coin, err = kucoin.GetCoin("TEST")
+	_, err = kucoin.GetCoin("TEST")
 	if assert.Error(t, err) {
 		require.Equal(t, kucoinGo.ErrNonExistingMarket, err)
 	}
 
-	coin, err = kucoin.GetCoin("BTC")
+	coin, err := kucoin.GetCoin("BTC")
 	t.Logf("GetCoin : %#v\n", coin)
 	require.NoError(t, err, defaultErrorMessage)
 }
 
 func TestGetCoinBalance(t *testing.T) {
-	coinBalance, err := kucoin.GetCoinBalance("")
+	_, err := kucoin.GetCoinBalance("")
 	if assert.Error(t, err) {
 		require.Equal(t, kucoinGo.ErrSymbolRequired, err)
 	}
-	coinBalance, err = kucoin.GetCoinBalance("TEST")
+	_, err = kucoin.GetCoinBalance("TEST")
 	if assert.Error(t, err) {
 		require.Equal(t, kucoinGo.ErrNonExistingMarket, err)
 	}
 
-	coinBalance, err = kucoin.GetCoinBalance("BTC")
+	coinBalance, err := kucoin.GetCoinBalance("BTC")
 	t.Logf("GetCoinBalance : %#v\n", coinBalance)
 	require.NoError(t, err, defaultErrorMessage)
 }
 
 func TestGetCoinDepositAddress(t *testing.T) {
-	coinDepositAddress, err := kucoin.GetCoinDepositAddress("")
+	_, err := kucoin.GetCoinDepositAddress("")
 	if assert.Error(t, err) {
 		require.Equal(t, kucoinGo.ErrSymbolRequired, err)
 	}
-	coinDepositAddress, err = kucoin.GetCoinDepositAddress("TEST")
+	_, err = kucoin.GetCoinDepositAddress("TEST")
 	if assert.Error(t, err) {
 		require.Equal(t, kucoinGo.ErrNonExistingMarket, err)
 	}
 
-	coinDepositAddress, err = kucoin.GetCoinDepositAddress("BTC")
+	coinDepositAddress, err := kucoin.GetCoinDepositAddress("BTC")
 	t.Logf("GetCoinDepositAddress : %#v\n", coinDepositAddress)
 	require.NoError(t, err, defaultErrorMessage)
 }
 
 func TestListActiveMapOrders(t *testing.T) {
-	activeMapOrders, err := kucoin.ListActiveMapOrders("", "")
+	_, err := kucoin.ListActiveMapOrders("", "")
 	if assert.Error(t, err) {
 		require.Equal(t, kucoinGo.ErrSymbolRequired, err)
 	}
-	activeMapOrders, err = kucoin.ListActiveMapOrders("TEST", "")
+	_, err = kucoin.ListActiveMapOrders("TEST", "")
 	if assert.Error(t, err) {
 		require.Equal(t, kucoinGo.ErrNonExistingSymbol, err)
 	}
-	activeMapOrders, err = kucoin.ListActiveMapOrders("KCS-BTC", "TEST")
+	_, err = kucoin.ListActiveMapOrders("KCS-BTC", "TEST")
 	if assert.Error(t, err) {
 		require.Equal(t, errors.New("Entered invalid parameter. Accepted values: [BUY,SELL]"), err)
 	}
 
-	activeMapOrders, err = kucoin.ListActiveMapOrders("KCS-BTC", "BUY")
+	activeMapOrders, err := kucoin.ListActiveMapOrders("KCS-BTC", "BUY")
 	t.Logf("ListActiveMapOrders : %#v\n", activeMapOrders)
 	require.NoError(t, err, defaultErrorMessage)
 }
 
 func TestListActiveOrders(t *testing.T) {
-	activeOrders, err := kucoin.ListActiveOrders("", "")
+	_, err := kucoin.ListActiveOrders("", "")
 	if assert.Error(t, err) {
 		require.Equal(t, kucoinGo.ErrSymbolRequired, err)
 	}
-	activeOrders, err = kucoin.ListActiveOrders("TEST", "")
+	_, err = kucoin.ListActiveOrders("TEST", "")
 	if assert.Error(t, err) {
 		require.Equal(t, kucoinGo.ErrNonExistingSymbol, err)
 	}
-	activeOrders, err = kucoin.ListActiveOrders("KCS-BTC", "TEST")
+	_, err = kucoin.ListActiveOrders("KCS-BTC", "TEST")
 	if assert.Error(t, err) {
 		require.Equal(t, errors.New("Entered invalid parameter. Accepted values: [BUY,SELL]"), err)
 	}
 
-	activeOrders, err = kucoin.ListActiveOrders("KCS-BTC", "")
+	activeOrders, err := kucoin.ListActiveOrders("KCS-BTC", "")
 	t.Logf("ListActiveMapOrders : %#v\n", activeOrders)
 	require.NoError(t, err, defaultErrorMessage)
 }
 
 func TestOrdersBook(t *testing.T) {
-	ordersBook, err := kucoin.OrdersBook("", 0, 0, "")
+	_, err := kucoin.OrdersBook("", 0, 0, "")
 	if assert.Error(t, err) {
 		require.Equal(t, kucoinGo.ErrSymbolRequired, err)
 	}
-	ordersBook, err = kucoin.OrdersBook("TEST", 0, 0, "")
+	_, err = kucoin.OrdersBook("TEST", 0, 0, "")
 	if assert.Error(t, err) {
 		require.Equal(t, kucoinGo.ErrNonExistingSymbol, err)
 	}
-	ordersBook, err = kucoin.OrdersBook("KCS-BTC", 0, 0, "TEST")
+	_, err = kucoin.OrdersBook("KCS-BTC", 0, 0, "TEST")
 	if assert.Error(t, err) {
 		require.Equal(t, errors.New("Entered invalid parameter. Accepted values: [BUY,SELL]"), err)
 	}
 
-	ordersBook, err = kucoin.OrdersBook("KCS-BTC", 0, 0, "BUY")
+	ordersBook, err := kucoin.OrdersBook("KCS-BTC", 0, 0, "BUY")
 	t.Logf("OrdersBook : %#v\n", ordersBook)
 	require.NoError(t, err, defaultErrorMessage)
 }
@@ -316,7 +316,7 @@ func TestCreateWithdrawalApply(t *testing.T) {
 }
 
 func TestCancelWithdrawal(t *testing.T) {
-	withdrawal, err := kucoin.CancelWithdrawal("", "")
+	_, err := kucoin.CancelWithdrawal("", "")
 	if assert.Error(t, err) {
 		require.Equal(t, kucoinGo.ErrAllParamsRequired, err)
 	}
@@ -325,7 +325,7 @@ func TestCancelWithdrawal(t *testing.T) {
 		require.Equal(t, kucoinGo.ErrNonExistingMarket, err)
 	}
 
-	withdrawal, err = kucoin.CancelWithdrawal("BTC", "5969ddc96732d54312eb960e")
+	withdrawal, err := kucoin.CancelWithdrawal("BTC", "5969ddc96732d54312eb960e")
 	t.Logf("CancelWithdrawal : %#v\n", withdrawal)
 	require.NoError(t, err, defaultErrorMessage)
 }
