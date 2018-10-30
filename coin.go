@@ -16,6 +16,19 @@ type Coin struct {
 	Coin              string      `json:"coin"`
 }
 
+// CoinPair struct represents coin-pair present in kucoin.
+type CoinPair struct {
+	CoinPair string `json:"coinPair"`
+}
+
+type rawCoinPair struct {
+	Success   bool       `json:"success"`
+	Code      string     `json:"code"`
+	Msg       string     `json:"msg"`
+	Timestamp int64      `json:"timestamp"`
+	Data      []CoinPair `json:"data"`
+}
+
 type rawCoins struct {
 	Success   bool   `json:"success"`
 	Code      string `json:"code"`
