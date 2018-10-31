@@ -12,10 +12,10 @@ import (
 
 // WebSocket represents websocket connection handler.
 type WebSocket struct {
-	token    string
-	userType string
-	ps       []instanceServer
-	hs       []historyServer
+	token          string
+	userType       string
+	instanceServer []instanceServer
+	historyServer  []historyServer
 }
 
 // NewWS returns initilised websocket connection.
@@ -56,20 +56,20 @@ func (ws *WebSocket) init() error {
 	}
 
 	ws.token = data.BulletToken
-	ws.ps = append(ws.ps[:0], data.InstanceServers...)
-	ws.hs = append(ws.hs[:0], data.HistoryServers...)
+	ws.instanceServer = append(ws.instanceServer[:0], data.InstanceServers...)
+	ws.historyServer = append(ws.historyServer[:0], data.HistoryServers...)
 
 	return nil
 }
 
-func (ws *WebSocket) selectServers() (ps *instanceServer, hs *historyServer) {
-	for _, s := range ws.ps {
+func (ws *WebSocket) selectServers() (is *instanceServer, hs *historyServer) {
+	for _, s := range ws.instanceServer {
 		if ws.userType == "" || s.UserType == ws.userType {
-			ps = &s
+			is = &s
 			break
 		}
 	}
-	for _, s := range ws.hs {
+	for _, s := range ws.historyServer {
 		if ws.userType == "" || s.UserType == ws.userType {
 			hs = &s
 			break
@@ -78,21 +78,18 @@ func (ws *WebSocket) selectServers() (ps *instanceServer, hs *historyServer) {
 	return
 }
 
-// Subscribe subscribes client to a topic.
-func (ws *WebSocket) Subscribe(tc Topic, sym string) (c *Conn, err error) {
-	var conn *fastws.Conn
-	var ps instanceServer
-	conn, ps, err = ws.dial(Subscribe, tc, sym)
+// Subscribe subscribes client to a Topic (Orderbook level2, History, Tick, Market)
+func (ws *WebSocket) Subscribe(topic Topic, symbol string) (c *Conn, err error) {
+	conn, is, err := ws.dial()
 	if err == nil {
 		c = &Conn{
-			cn:  sync.NewCond(&sync.Mutex{}),
-			sym: sym,
-			ps:  ps,
-			sm:  sym,
-			tc:  tc,
-			c:   conn,
+			cond:           sync.NewCond(&sync.Mutex{}),
+			symbol:         symbol,
+			instanceServer: is,
+			topic:          topic,
+			conn:           conn,
 		}
-		_, err = c.Send(Subscribe, tc, sym)
+		_, err = c.Send(Subscribe, topic, symbol)
 		if err == nil {
 			c.init()
 			go c.handle()
@@ -104,23 +101,23 @@ func (ws *WebSocket) Subscribe(tc Topic, sym string) (c *Conn, err error) {
 	return
 }
 
-func (ws *WebSocket) dial(t Type, tc Topic, sym string) (c *fastws.Conn, ps instanceServer, err error) {
-	pps, _ := ws.selectServers()
-	if pps == nil {
+func (ws *WebSocket) dial() (conn *fastws.Conn, is instanceServer, err error) {
+	iss, _ := ws.selectServers()
+	if iss == nil {
 		err = fmt.Errorf("error selecting server. Server for %s not found", ws.userType)
 		return
 	}
-	ps = *pps
+	is = *iss
 
 	uri := fasthttp.AcquireURI()
 	defer fasthttp.ReleaseURI(uri)
 
-	uri.Update(ps.Endpoint)
+	uri.Update(is.Endpoint)
 	args := uri.QueryArgs()
 	args.Add("bulletToken", ws.token)
 	args.Add("format", "json")
 	args.Add("resource", "api")
 
-	c, err = fastws.Dial(uri.String())
+	conn, err = fastws.Dial(uri.String())
 	return
 }

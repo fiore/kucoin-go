@@ -14,33 +14,29 @@ import (
 // Conn represents WebSocket connection to a Topic.
 // Use Update() func to get server messages.
 type Conn struct {
-	cn *sync.Cond
-	b  bool
-
-	sym string
-	ps  instanceServer
-
-	up      chan interface{}
-	noClose bool
-
-	tc         Topic
-	sm         string
-	c          *fastws.Conn
-	lastUpdate time.Time
+	cond           *sync.Cond
+	isLock         bool
+	symbol         string
+	instanceServer instanceServer
+	up             chan interface{}
+	noClose        bool
+	topic          Topic
+	conn           *fastws.Conn
+	lastUpdate     time.Time
 }
 
 func (c *Conn) lock() {
-	c.cn.L.Lock()
-	for c.b {
-		c.cn.Wait()
+	c.cond.L.Lock()
+	for c.isLock {
+		c.cond.Wait()
 	}
-	c.b = true
-	c.cn.L.Unlock()
+	c.isLock = true
+	c.cond.L.Unlock()
 }
 
 func (c *Conn) unlock() {
-	c.b = false
-	c.cn.Signal()
+	c.isLock = false
+	c.cond.Signal()
 }
 
 // SetUpdates sets parsed channel to be used when a update fire.
@@ -55,27 +51,27 @@ func (c *Conn) SetUpdates(ch chan interface{}) {
 
 // Symbol returns current connected symbol.
 func (c *Conn) Symbol() string {
-	return c.sym
+	return c.symbol
 }
 
 // PingInterval returns server ping interval.
 func (c *Conn) PingInterval() int {
-	return c.ps.PingInterval
+	return c.instanceServer.PingInterval
 }
 
 // Encrypt returns if connection is encrypted (wss or ws).
 func (c *Conn) Encrypt() bool {
-	return c.ps.Encrypt
+	return c.instanceServer.Encrypt
 }
 
 // PingTimeout returns server ping timeout.
 func (c *Conn) PingTimeout() int {
-	return c.ps.PingTimeout
+	return c.instanceServer.PingTimeout
 }
 
 // UserType returns connection user type.
 func (c *Conn) UserType() string {
-	return c.ps.UserType
+	return c.instanceServer.UserType
 }
 
 func (c *Conn) init() {
@@ -103,15 +99,15 @@ func (c *Conn) Updates() <-chan interface{} {
 
 // IsClosed returns if connection is closed.
 func (c *Conn) IsClosed() bool {
-	return c.up == nil && c.c == nil
+	return c.up == nil && c.conn == nil
 }
 
 // Close closes websocket connection and updates channel.
 func (c *Conn) Close() (err error) {
-	if c.c != nil {
-		err = c.c.Close("Bye")
+	if c.conn != nil {
+		err = c.conn.Close("Bye")
 		if err == nil {
-			c.c = nil
+			c.conn = nil
 		}
 	}
 	c.close()
@@ -151,13 +147,13 @@ func (c *Conn) Send(tp Type, tc Topic, sym string) (r Response, err error) {
 	var data []byte
 	data, err = json.Marshal(req)
 	if err != nil {
-		c.c.Close("error marshaling data")
+		c.conn.Close("error marshaling data")
 		return
 	}
-	_, err = c.c.Write(data)
+	_, err = c.conn.Write(data)
 	if err == nil {
 		var fr *fastws.Frame
-		fr, err = c.c.NextFrame() // must read ack
+		fr, err = c.conn.NextFrame() // must read ack
 		if err == nil {
 			err = json.Unmarshal(fr.Payload(), &r)
 			fastws.ReleaseFrame(fr)
@@ -183,7 +179,7 @@ func (c *Conn) checkUpdates(stop chan struct{}) {
 				if err != nil {
 					c.sendUpdate(err)
 				} else {
-					c.c.Write(data)
+					c.conn.Write(data)
 				}
 			}
 		}
@@ -191,7 +187,7 @@ func (c *Conn) checkUpdates(stop chan struct{}) {
 }
 
 func (c *Conn) handle() {
-	if c.c == nil {
+	if c.conn == nil {
 		c.up <- errors.New("nil connection")
 		return
 	}
@@ -201,7 +197,7 @@ func (c *Conn) handle() {
 	var fr *fastws.Frame
 	var err error
 	for {
-		fr, err = c.c.NextFrame()
+		fr, err = c.conn.NextFrame()
 		if err != nil {
 			if err == fastws.EOF {
 				break
@@ -217,7 +213,7 @@ func (c *Conn) handle() {
 			}
 			break
 		}
-		res := c.doDecode(c.tc, fr.Payload())
+		res := c.doDecode(c.topic, fr.Payload())
 		if c.sendUpdate(res) {
 			break
 		}
@@ -291,9 +287,9 @@ func (c *Conn) handlePingClose(fr *fastws.Frame) (err error) {
 		fr.Reset()
 		fr.SetFin()
 		fr.SetPong()
-		_, err = c.c.WriteFrame(fr)
+		_, err = c.conn.WriteFrame(fr)
 	case fr.IsClose():
-		err = c.c.ReplyClose(fr)
+		err = c.conn.ReplyClose(fr)
 		if err == nil {
 			err = fastws.EOF
 		}

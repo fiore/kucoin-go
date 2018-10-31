@@ -11,6 +11,7 @@ const (
 // Topic represents topic in which user can perform Type actions.
 type Topic byte
 
+// Generic ids used to subscribe to a topic
 const (
 	TOrderBook Topic = iota
 	THistory

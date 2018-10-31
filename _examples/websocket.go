@@ -5,7 +5,7 @@ import (
 	"os"
 	"os/signal"
 
-	"github.com/eeonevision/kucoin-go/websocket"
+	"github.com/fiore/kucoin-go/websocket"
 )
 
 func main() {
