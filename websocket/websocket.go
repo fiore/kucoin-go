@@ -97,7 +97,7 @@ func (ws *WebSocket) Subscribe(tc Topic, sym string) (c *Conn, err error) {
 			c.init()
 			go c.handle()
 		} else {
-			conn.Close(err.Error())
+			conn.Close()
 			c = nil
 		}
 	}
