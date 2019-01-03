@@ -109,7 +109,7 @@ func (c *Conn) IsClosed() bool {
 // Close closes websocket connection and updates channel.
 func (c *Conn) Close() (err error) {
 	if c.c != nil {
-		err = c.c.Close("Bye")
+		err = c.c.Close()
 		if err == nil {
 			c.c = nil
 		}
@@ -151,7 +151,7 @@ func (c *Conn) Send(tp Type, tc Topic, sym string) (r Response, err error) {
 	var data []byte
 	data, err = json.Marshal(req)
 	if err != nil {
-		c.c.Close("error marshaling data")
+		c.c.Close()
 		return
 	}
 	_, err = c.c.Write(data)
